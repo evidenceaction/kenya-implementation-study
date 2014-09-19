@@ -19,7 +19,7 @@
 opts_chunk$set(cache=TRUE)
 @
 
-\title{Technical Notes on Evaluating the Effectiveness of MDA Mechanisms}
+\title{Technical Note on Evaluating the Effectiveness of MDA Mechanisms}
 
 \begin{document}
 
