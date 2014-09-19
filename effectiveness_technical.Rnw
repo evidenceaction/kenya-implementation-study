@@ -1,0 +1,68 @@
+\documentclass{article}[12pt]
+
+\usepackage[utf8]{inputenc}
+\usepackage{fullpage}
+\usepackage{mathtools}
+\usepackage{amsmath}
+\usepackage{bbm}
+\usepackage{graphics,graphicx}
+\usepackage{pstricks,pst-node,pst-tree}
+\usepackage{graphviz}
+\usepackage[citestyle=authoryear, url=false, citetracker=true, maxcitenames=2, maxbibnames=99, autopunct=true, backend=biber]{biblatex}
+\usepackage{graphicx}
+
+\addbibresource{/home/karim/Documents/library.bib}
+
+\newcommand{\E}{\text{E}}
+
+<<setup, include=FALSE>>=
+opts_chunk$set(cache=TRUE)
+@
+
+\title{Technical Notes on Evaluating the Effectiveness of MDA Mechanisms}
+
+\begin{document}
+
+\maketitle
+
+
+Let
+\begin{itemize}
+  \item $Z_j \in \{0, 1\}$ be an indicator of whether cluster $j$ is receiving a candidate delivery mechanism or not (standard school-based program).  For simplicity, we assume we are only testing one mechanism.
+  \item $D_{ij} \in \{0, 1\}$ be an indicator of whether individual $i$ has chosed to take STH drug treatment or not.
+  \item $H_{ij} \in \{0, 1\}$ be an indicator of whether individual $i$ is infected with STH or not.
+\end{itemize}
+
+Using a potential outcomes framework to describe causality, let
+\begin{itemize}
+  \item $D_{ij}(z)$ be potential drug takeup given treatment $Z_j = z$.
+  \item $H_{ij}(d)$ be potential health status given treament compliance $D_{ij} = d$. For simplicity, we assume that the health outcomes of interest is infection prevalence.  This model can be easily modified to reprsent infection intensity.  We make the assumption that $H_{ij}(1) = 1, \forall i,j$, leaving us with two types of individuals
+    \begin{itemize}
+      \item $H_{ij}(0) = 1$, the \emph{always-healthy}, and
+      \item $H_{ij}(0) = 0$, the \emph{healthy-on-treatment-only}.
+    \end{itemize}
+\end{itemize}
+Thus, our causal chain is
+\begin{equation}
+   Z_j \rightarrow D_{ij} \rightarrow H_{ij} \label{eqn:causal-chain}. 
+ \end{equation}
+
+The goal of the implementation study is to evaluate the difference in probability of drug treament takeup for those who would benefit from such treatment, the \emph{healthy-on-treatment-only}
+\begin{equation}
+  \Pr[D_{ij}(1) > D_{ij}(0) | H_{ij}(0) = 0] = \E[D_{ij}(1) - D_{ij}(0) | H_{ij}(0) = 0]. \label{eqn:primary-outcome}
+\end{equation}
+  
+We could conduct parasitology surveys prior to the delivery mechanism intervention, identifying the \emph{health-on-treatment-only}, and then we conduct surveys on compliance post-treatment.  A simple comparison of sample means would estimate \eqref{eqn:primary-outcome}.  However, a pre-treatment survey is likely to influence compliance in the population.  This effect should be particularly strong if we are required to reveal survey results (a reasonable ethnical requirement).  Even those who are not be surveyed might be influenced by the knowledge that others have been surveyed (and with whatever infection status they are found to have).
+
+Alternatively, because of the causal chain described by \eqref{eqn:causal-chain}, we are able to identify
+  \[ \Pr[ H_{ij}(0) = 0 | D _{ij}(1) > D_{ij}(0)] = \E[ 1 - H_{ij}(0) |D _{ij}(1) - D_{ij}(0)]  \]
+using the Wald estimator
+\[
+%   \[ \frac{\E[H_{ij}| Z_j = 1] - \E[H_{ij}|Z_j = 0]}{\E[D_{ij}| Z_j = 1] - \E[D_{ij}|Z_j = 0]} = 
+  \frac{1 - \E[H_{ij}|Z_j = 0]}{\E[D_{ij}| Z_j = 1] - \E[D_{ij}|Z_j = 0]}. \]
+
+Using Bayes' rule we can estimate \eqref{eqn:primary-outcome}
+\[ Pr[D_{ij}(1) > D_{ij}(0) | H_{ij}(0) = 0] = \frac{\Pr[ H_{ij}(0) = 0 | D _{ij}(1) > D_{ij}(0)]\cdot\Pr[D_{ij}(1) > D_{ij}(0)]}{\Pr[H_{ij}(0) = 0]}. \]
+Since we make the assumption that all those receiving treatment are healthy, $H_{ij}(1) = 1$, we only need to collect parasitology surveys from those refusing treatment, $D_{ij} = 0$.
+
+\end{document}
