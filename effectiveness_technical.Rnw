@@ -57,12 +57,10 @@ We could conduct parasitology surveys prior to the delivery mechanism interventi
 Alternatively, because of the causal chain described by \eqref{eqn:causal-chain}, we are able to identify
   \[ \Pr[ H_{ij}(0) = 0 | D _{ij}(1) > D_{ij}(0)] = \E[ 1 - H_{ij}(0) |D _{ij}(1) - D_{ij}(0)]  \]
 using the Wald estimator
-\[
-%   \[ \frac{\E[H_{ij}| Z_j = 1] - \E[H_{ij}|Z_j = 0]}{\E[D_{ij}| Z_j = 1] - \E[D_{ij}|Z_j = 0]} = 
-  \frac{1 - \E[H_{ij}|Z_j = 0]}{\E[D_{ij}| Z_j = 1] - \E[D_{ij}|Z_j = 0]}. \]
+\[ \frac{\E[H_{ij}| Z_j = 1] - \E[H_{ij}|Z_j = 0]}{\E[D_{ij}| Z_j = 1] - \E[D_{ij}|Z_j = 0]}  \] 
+%   \frac{1 - \E[H_{ij}|Z_j = 0]}{\E[D_{ij}| Z_j = 1] - \E[D_{ij}|Z_j = 0]}. \]
 
 Using Bayes' rule we can estimate \eqref{eqn:primary-outcome}
 \[ Pr[D_{ij}(1) > D_{ij}(0) | H_{ij}(0) = 0] = \frac{\Pr[ H_{ij}(0) = 0 | D _{ij}(1) > D_{ij}(0)]\cdot\Pr[D_{ij}(1) > D_{ij}(0)]}{\Pr[H_{ij}(0) = 0]}. \]
-Since we make the assumption that all those receiving treatment are healthy, $H_{ij}(1) = 1$, we only need to collect parasitology surveys from those refusing treatment, $D_{ij} = 0$.
 
 \end{document}
