@@ -68,10 +68,8 @@ prepost.sth.long.data <- reshape(prepost.sth.data,
 
 # High frequency data -----------------------------------------------------
 
-hf.sth.data <- read.csv("~/Data/Kenya STH/Y1_HF_noschoolname.csv", as.is=TRUE) 
-names(hf.sth.data) <- gsub("_", ".", names(hf.sth.data))
-
-hf.sth.data <- hf.sth.data %>%
+hf.sth.data <- read.csv("~/Data/Kenya STH/Y1_HF_noschoolname.csv", as.is=TRUE) %>%
+  set_names(gsub("_", ".", names(.))) %>%
   rename(c("asc.high"="as.high",
            "id"="origin.id")) %>%
   mutate(schoolcode=factor(schoolcode),
@@ -80,7 +78,11 @@ hf.sth.data <- hf.sth.data %>%
          dateofsurvey=as.Date(dateofsurvey, format="%m/%d/%Y"),
          treatdate=as.Date(treatdate, format="%m/%d/%Y"),
          sincetreat=as.numeric(dateofsurvey - treatdate),
-         sex=factor(gender, levels=c(2, 1), labels=c("female", "male")))
+         sincetreat2=sincetreat^2,
+         sex=factor(gender, levels=c(2, 1), labels=c("female", "male"))) %>%
+  group_by(origin.id) %>%
+  mutate(num.survey=n()) %>%
+  ungroup
 
 prevalence.col <- grepl("infect$", names(hf.sth.data))
 hf.sth.data[, prevalence.col] <- llply(hf.sth.data[, prevalence.col], equals, y=1)
@@ -148,20 +150,51 @@ for (it in infection.types) {
   reg.res %>% lht("n.survey.fac3 = n.survey.fac4", vcov=vcov.cluster(reg.data, ., cluster1="districtcode")) %>% print
 }
 
-epg.quant.res <- foreach (it="as") %do% { #infection.types) %do% {
-  sprintf("%s\n", it) %>% cat
-  prepost.sth.long.data %>% 
+# epg.quant.res <- foreach (it="as") %do% { #infection.types) %do% {
+#   sprintf("%s\n", it) %>% cat
+  quant.reg.res <- prepost.sth.long.data %>% 
     filter(infection.type == it) %>%
 #     mutate(censor=24024,
 #            lcensor=0,
 #            epg=pmin(censor, epg)) %>%
 #     crq(Curv(epg, censor, ctype="right") ~ n.survey.fac, taus=80:99/100, data=.) 
 #     crq(Curv(epg, lcensor, ctype="left") ~ survey, tau=0.92, data=., method="Pow", start="global") 
-    rq(epg ~ n.survey.fac, tau=c(80, 81, 83, 86, 88, 90, 93, 95, 96, 98)/100, data=.) %>%
-    summary(se="boot") %>%
-    print
-}
+    rq(epg ~ n.survey.fac, tau=c(80, 81, 83, 86, 88, 90, 93, 95, 96, 98)/100, data=.) # %>%
+#     summary(se="boot") %>%
+#     print
+# }
 
+# for (it in "as") { # infection.types) {
+#   sprintf("%s\n", it) %>% cat
+  reg.data <- prepost.sth.long.data %>% filter(infection.type == it) 
+  reg.res <- lm(epg ~ n.survey.fac, data=reg.data)
+  reg.vcov <- vcov.cluster(reg.data, reg.res, cluster1="districtcode")
+  reg.res %>% coeftest(., vcov=reg.vcov) %>% print
+  reg.res %>% lht("n.survey.fac3 = n.survey.fac4", vcov=vcov.cluster(reg.data, ., cluster1="districtcode")) %>% print
+# }
+
+quant.predict.data <- quant.reg.res %>% 
+  predict(data.frame(n.survey.fac=factor(1:4))) %>% 
+  t %>% 
+  as.data.frame %>% 
+  mutate(tau=rownames(.), 
+         tau=sub("tau=\\s+", "", tau) %>% as.numeric) %>% 
+  set_names(c(paste0("quant.", 1:4), "tau")) %>% 
+  reshape(direction="long", varying=1:4, idvar="tau", timevar="survey") %>% 
+  filter(tau %in% c(0.9, 0.95, 0.96, 0.98))
+
+ols.predict.data <- reg.res %>% 
+  predict(data.frame(n.survey.fac=factor(1:4))) %>% 
+  as.data.frame %>% 
+  set_names("ave") %>% 
+  mutate(survey=1:4)
+
+ggplot(quant.predict.data, aes(x=survey, y=quant, color=factor(tau))) + 
+  geom_point(aes(shape="Quant")) + 
+  geom_line(aes(linetype="Quant")) +
+  geom_point(aes(y=ave, shape="Mean"), data=ols.predict.data) + 
+  geom_line(aes(y=ave, linetype="Mean"), data=ols.predict.data)
+              
 epg.quant.res <- foreach (it="as") %do% { #infection.types) %do% {
   sprintf("%s\n", it) %>% cat
   prepost.sth.long.data %>% 
@@ -170,6 +203,14 @@ epg.quant.res <- foreach (it="as") %do% { #infection.types) %do% {
 #     summary(se="boot") %>%
     summary(se="boot") %>%
     print
+}
+
+for (it in "as") { # infection.types) {
+  sprintf("%s\n", it) %>% cat
+  reg.data <- prepost.sth.long.data %>% filter(infection.type == it, infect == "positive") 
+  reg.res <- lm(epg ~ n.survey.fac, data=reg.data)
+  reg.res %>% coeftest(., vcov=vcov.cluster(reg.data, ., cluster1="districtcode")) %>% print
+  reg.res %>% lht("n.survey.fac3 = n.survey.fac4", vcov=vcov.cluster(reg.data, ., cluster1="districtcode")) %>% print
 }
 
 for (it in infection.types) {
