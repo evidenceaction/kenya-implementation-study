@@ -35,9 +35,10 @@ vcov.cluster <- function(data, fm, cluster1, cluster2) {
   # data set and may not be in the regression model.
   # I use complete.cases following a suggestion from 
   # Francois Cocquemas <francois.cocquemas@gmail.com>
-  inc.obs <- complete.cases(data[,names(fm$model)])
+#   inc.obs <- complete.cases(data[,names(fm$model)])
   # inc.obs <- !is.na(est.fun[,1])
   # est.fun <- est.fun[inc.obs,]
+  inc.obs <- complete.cases(model.frame(attr(fm$model, "terms"), data=data, na.action=na.pass))
   
   # Shared data for degrees-of-freedom corrections
   N  <- dim(fm$model)[1]
