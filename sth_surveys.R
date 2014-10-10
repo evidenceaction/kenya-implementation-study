@@ -24,16 +24,16 @@ prepost.sth.data <- read.csv("~/Data/Kenya STH/Y1Y2_60_prepost.csv", as.is=TRUE)
          schoolcode=factor(schoolcode),
          districtcode=factor(districtcode),
          date=as.Date(date, format="%m/%d/%Y"),
+         survey.mon=format(date, "%Y-%m") %>% factor(),
          sex=factor(gender, levels=c("female", "male")),
          survey=factor(survey) %>% relevel(ref="Y1pre"),
          county=factor(county),
-         n.survey.fac=factor(n.survey)) %>%
+         n.survey.fac=factor(n.survey),
+         deworm.status=sub("Y\\d", "", as.character(survey)) %>% factor %>% relevel(ref="pre")) %>%
   mutate(shaem.high=shaeme > 50,
-         shaemepg=NA)
-
-prepost.sth.data[, paste0(sth.infection.types, "e")] <- NA
-
-prepost.sth.data$gender <- NULL
+         shaemepg=NA) %>%
+  select(-matches(sprintf("(%s)e$", paste(infection.types, collapse="|")))) %>%
+  select(-gender) 
 
 prevalence.col <- grep("infect$", names(prepost.sth.data), value=TRUE)
 prepost.sth.data[, prevalence.col] <- llply(prepost.sth.data[, prevalence.col], levels=c("positive", "negative"), factor)
@@ -43,28 +43,23 @@ hi.intensity.col <- grep("high$", names(prepost.sth.data), value=TRUE)
 prepost.sth.data[, hi.intensity.col] <- prepost.sth.data[, hi.intensity.col] == 1
 prepost.sth.data[, paste0(hi.intensity.col, ".bin")] <- ifelse(prepost.sth.data[, hi.intensity.col] == TRUE, 1, 0)
 
-
 infection.levels <- data.frame(infection.type=sth.infection.types %>% setdiff("sth"),
                                moderate.epg=c(5000, 1000, 2000, 100),
                                high.epg=c(50000, 10000, 4000, 400))
 
+prepost.sth.long.data <- prepost.sth.data %>% 
+  (l(.data ~ reshape(.data, 
+                       direction="long",
+                       varying=llply(.v.names, function(vn, it) paste0(it, vn), infection.types),
+                       v.names=.v.names %>% gsub("^\\.", "", .), 
+                       times=infection.types,
+                       timevar="infection.type",
+                       ids=.data$id)) %>% add_args(.v.names=c("infect", "epg", ".high", "infect.bin", ".high.bin"))) %>%
+  merge(infection.levels, by="infection.type", all.x=TRUE) 
 
-prepost.sth.long.data <- reshape(prepost.sth.data,  
-                                 direction="long", 
-                                 varying=list(paste0(infection.types, "infect"),
-                                              paste0(infection.types, "epg"),
-                                              paste0(infection.types, "e"),
-                                              paste0(infection.types, ".high"),
-                                              paste0(infection.types, "infect.bin"),
-                                              paste0(infection.types, ".high.bin")),
-                                 v.names=c("infect", "epg", "e", "high.intensity", "infect.bin", "high.intensity.bin"),
-                                 times=infection.types,
-                                 timevar="infection.type",
-                                 ids=id) %>%
-  merge(infection.levels, by="infection.type", all.x=TRUE, all.y=TRUE) %>%
-  mutate(check.mod.hi=(infection.type == "sth") | ((epg >= moderate.epg) == high.intensity),
-         high.intensity.only=epg >= high.epg,
-         high.intensity.only.bin=ifelse(high.intensity.only == TRUE, 1, 0))
+prepost.school.data <- prepost.sth.long.data %>%
+  group_by(schoolcode, n.survey, infection.type) %>%
+  summarize(mean.epg=mean(epg), mean.infect.bin=mean(infect.bin))
 
 # High frequency data -----------------------------------------------------
 
@@ -79,13 +74,34 @@ hf.sth.data <- read.csv("~/Data/Kenya STH/Y1_HF_noschoolname.csv", as.is=TRUE) %
          treatdate=as.Date(treatdate, format="%m/%d/%Y"),
          sincetreat=as.numeric(dateofsurvey - treatdate),
          sincetreat2=sincetreat^2,
-         sex=factor(gender, levels=c(2, 1), labels=c("female", "male"))) %>%
+         sex=factor(gender, levels=c(2, 1), labels=c("female", "male")),
+         deworm.status=factor(sincetreat >= 0, levels=c(TRUE, FALSE), labels=c("post", "pre"))) %>%
+  select(-gender) %>%
   group_by(origin.id) %>%
   mutate(num.survey=n()) %>%
   ungroup
 
 prevalence.col <- grepl("infect$", names(hf.sth.data))
 hf.sth.data[, prevalence.col] <- llply(hf.sth.data[, prevalence.col], equals, y=1)
+
+hf.sth.long.data <- hf.sth.data %>%
+  mutate(shaemepg=NA, shaem.high=NA, sth.high=NA) %>%
+  (l(.data ~ reshape(.data,
+                     direction="long",
+                     varying=llply(.v.names, function(vn, it) paste0(it, vn), infection.types),
+                     v.names=.v.names %>% sub("^\\.", "", .),
+                     times=infection.types,
+                     timevar="infection.type")) %>% 
+     add_args(.v.names=c("infect", "epg", ".high"))) %>%
+  merge(infection.levels, by="infection.type", all.x=TRUE) %>%
+  mutate(high=epg > moderate.epg) %>%
+  merge(filter(., deworm.status == "pre") %>% 
+          arrange(nr.survey) %>% 
+          group_by(origin.id, infection.type) %>% 
+          summarize(bl.epg=last(epg), 
+                    bl.high=last(high)),
+        by=c("origin.id", "infection.type"),
+        all.x=TRUE)
 
 # Plots -------------------------------------------------------------------
 
@@ -228,3 +244,45 @@ for (it in infection.types) {
   reg.res %>% coeftest(., vcov=vcov.cluster(reg.data, ., cluster1="districtcode")) %>% print
   reg.res %>% lht("n.survey.fac3 = n.survey.fac4", vcov=vcov.cluster(reg.data, ., cluster1="districtcode")) %>% print
 }
+
+reg.data <- hf.sth.long.data %>% 
+  filter(infection.type == "as", sincetreat >= 0) %>% 
+  mutate(sincetreat_bl.epg=sincetreat * bl.epg,
+         sincetreat_bl.high=sincetreat * bl.high)
+
+predict.data <- expand.grid(dateofsurvey=mean(reg.data$dateofsurvey), 
+                            sincetreat=range(reg.data$sincetreat),
+                            bl.high=0:1) %>%
+#                             bl.epg=rep(quantile(reg.data$bl.epg, seq(0, 1, 0.05)), each=2)) %>% 
+            mutate(#sincetreat_bl.epg=sincetreat * bl.epg,
+                   sincetreat_bl.high=sincetreat * bl.high) 
+predicted.epg <- lm(epg ~ dateofsurvey + sincetreat + sincetreat_bl.high, reg.data) %T>% 
+  (l(reg.res ~ coeftest(reg.res, vcov=vcov.cluster(reg.data, reg.res, cluster1="districtcode")) %>% print)) %T>%
+  (l(reg.res ~ lht(reg.res, c("sincetreat_bl.high", "sincetreat")) %>% print)) %>%
+  predict(newdata=predict.data) %>% unname
+
+predict.data %>%
+  mutate(epg=predicted.epg) %>% 
+  ggplot(aes(x=sincetreat, y=epg)) + geom_line(aes(color=factor(bl.high))) 
+
+qplot(x=predict.data$sincetreat, y=., geom="point")
+  ggplot(predict.data, y=.) %>% geom_line(aes(x=sincetreat, color=bl.epg))
+
+d_ply(prepost.sth.long.data, .(infection.type), function(df) {
+  lm(infect.bin ~ deworm.status + survey.mon, data=df) %>% 
+    coeftest(vcov=vcov.cluster(df, ., cluster1="districtcode")) %>%
+    print
+})  
+
+d_ply(prepost.sth.long.data, .(infection.type), function(df) {
+  cat(sprintf("%s\n", df$infection.type[1]))
+  lm(high.bin ~ deworm.status + survey.mon, data=df) %>% 
+    coeftest(vcov=vcov.cluster(df, ., cluster1="districtcode")) %>%
+    print
+})  
+
+d_ply(prepost.sth.long.data, .(infection.type), function(df) {
+  try(rq(epg ~ deworm.status + survey.mon, data=df, tau=c(0.80, 0.98)) %>% summary %>% print)
+})  
+
+lm(infect.bin ~ deworm.status + survey.mon, data=prepost.sth.long.data, subset=infection.type == "as")
