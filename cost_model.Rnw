@@ -1,0 +1,57 @@
+\documentclass{article}
+
+\usepackage{mathtools}
+\usepackage{fullpage}
+
+\title{Deworming Cost Model}
+
+\begin{document}
+
+\maketitle
+
+The literature on cost effectiveness models highlights the importance of program benefits per input costs. One popular measure of benefits includes improved health outcomes, often estimated in DALYs. Alternatively, models have used additional years of school attendance per dollar spent to also demonstrate cost effectiveness. While deworming children has proven to cost effectively save DALYs and increase years of average school attendance, the main benefit of extending deworming to adults, is to reach a minimum level of coverage in the population to cause a break in the STH transmission point, thus eliminating the future need for deworming. 
+
+Therefore, the cost effectiveness model relies on reaching enough people to cause a break in the transmission cycle while minimizing input costs. The model’s output is the number of adults treated per dollar spent. Based on this output the cost effectiveness model focuses on minimizing program input costs that would reach the largest portion of adults taking into consideration demographics, rate of infection at different points in time, and probability of treatment up-take.
+
+We model the coverage objective function as
+\[ \sum_{i=1}^L \theta_i \cdot \pi_{it} \cdot f_{it}(\mathbf{x}) \]
+where
+
+\begin{itemize}
+  \item $\theta_i$ is the proportion of population in the strata $i$, such that $\sum_i \theta_i = 1$.  We split the population into $N$ strata (subpopulations) based on demographics, location, etc.
+  \item $\pi_{it}$ is the probability of an individual in strata $i$ being infected at time $t$
+  \item $\mathbf{x}$ is a vector of "inputs": the treatment delivery mechanisms utilized (e.g. school-based, market-based, church-based, etc.)  
+  \item $f_{it}(\cdot)$ is the probability of an individual in strata $i$ at time $t$ taking deworming drugs given inputs $\mathbf{x}$
+\end{itemize}
+
+Our goal is to minimize the total cost
+\begin{align*} 
+  &\min_{\mathbf{x}} C(\mathbf{x};\mathbf{p}) \\
+  &s.t. \sum_i \theta_i \cdot \pi_{it} \cdot f_{it}(\mathbf{x}) \geq b 
+\end{align*}
+
+where $C(\cdot)$ is the cost model and $b$ is the level of coverage needed according to the technical study
+
+If deworming treatment needs be done $T$ times, and allowing for different levels of treatment coverage over time $\mathbf{b} = \{b_t\}$, as well as changes in the probability of infection and takeup, the problem is
+
+\begin{align*} 
+&C^*(\mathbf{b};\mathbf{p}) \equiv  \min_{\mathbf{x}_1,\dots,\mathbf{x}_T} \sum _{t=1}^T  C(\mathbf{x}_t,\mathbf{p}) \\ 
+&s.t. \\ 
+ &\sum_i \theta_i \cdot \pi_{i1} \cdot f_{i1}(\mathbf{x}_1) \geq b_1 \\ 
+ &\vdots \\ 
+ &\sum_i \theta_i \cdot \pi_{iT} \cdot f_{iT}(\mathbf{x}_T) \geq b_T
+\end{align*}
+
+which yields the optimal levels of input (treatment delivery mechanisms) $\{ x_{mt}^*(b_t; \mathbf{p}) \}$
+
+A simplified version of this problem where we do not distinguish between individuals is
+
+\begin{align*} 
+&C^{**}(\mathbf{b};\mathbf{p}) \equiv  \min_{\mathbf{x}_1,\dots,\mathbf{x}_T} \sum _{t=1}^T  C(\mathbf{x}_t,\mathbf{p}) \\ 
+&s.t. \\ 
+&f_1(\mathbf{x}_1) \geq b_1 \\ 
+&\vdots \\ 
+&f_T(\mathbf{x}_T) \geq b_T
+\end{align*}
+
+\end{document}
