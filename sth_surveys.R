@@ -8,18 +8,23 @@ library(plm)
 library(lmtest)
 library(car)
 library(quantreg)
+library(yaml)
 
 source("cluster2.R")
+
+# Init --------------------------------------------------------------------
+
+config <- yaml.load_file("config.yaml")
 
 # Prep data ---------------------------------------------------------------
 
 sth.infection.types <- c("as", "tr", "hk", "sm", "sth")
 infection.types <- c(sth.infection.types, "shaem")
 
-prepost.sth.data <- read.csv("~/Data/Kenya STH/Y1Y2_60_prepost.csv", as.is=TRUE) %>%
+prepost.sth.data <- read.csv(sprintf("%s/Kenya STH/Y1Y2_60_prepost.csv", config$data_path), as.is=TRUE) %>%
   set_names(gsub("_", ".", names(.))) %>%
-  rename(c("asc.high"="as.high",
-           "id"="origin.id")) %>%
+  rename(as.high=asc.high,
+         origin.id=id) %>%
   mutate(id=paste(origin.id, n.survey, sep="-"),
          schoolcode=factor(schoolcode),
          districtcode=factor(districtcode),
@@ -63,10 +68,10 @@ prepost.school.data <- prepost.sth.long.data %>%
 
 # High frequency data -----------------------------------------------------
 
-hf.sth.data <- read.csv("~/Data/Kenya STH/Y1_HF_noschoolname.csv", as.is=TRUE) %>%
+hf.sth.data <- read.csv(sprintf("%s/Kenya STH/Y1_HF_noschoolname.csv", config$data_path), as.is=TRUE) %>%
   set_names(gsub("_", ".", names(.))) %>%
-  rename(c("asc.high"="as.high",
-           "id"="origin.id")) %>%
+  rename(as.high=asc.high,
+         origin.id=id) %>%
   mutate(schoolcode=factor(schoolcode),
          districtcode=factor(districtcode),
          prov.code=factor(prov.code),
