@@ -1,5 +1,32 @@
 ---
-title: "Non-experimental Evalution of the Impact of Deworming on School Attendance"
+title: "Non-experimental Evaluation of the Impact of Deworming on School Attendance"
 output: pdf_document
+bibliography: ~/Documents/library.bib
 ---
 
+Evidence Action continues to investigate the effect of deworming on school outcomes, as first studied by @Miguel2004 in Kenya.  However, because of practical and ethical obstracles it is no longer feasible to replicate the original randomized experiment.  Thus we are looking for non-experimental strategies to answer the following questions:
+
+1. How is the school attendance of school-aged children (SAC) impacted by deworming?  (This is a straightforward intention-to-treat analysis.)
+2. What is the effect of deworming on the school attendance of SAC who are vulnerable to moderate to high levels of worm infection?  (This is an analysis of local average treatment effects, focusing on the latent subpopulation that most in need of deworming [@Imbens1994].)
+
+The elimination breakpoint study to be carried out by the London School of Hygiene and Tropical Medicine (LSHTM) presents a valuable opportunity to answer these questions, exploiting the randomized manipulation of reinfection rates.  At the same point of time---because of the greater frequency of deworming in one arm, and the wider deworming of the whole community in another arm---SAC be at risk of randomly varying levels of infection intensity.  Therefore, if reinfection is rapid enough within the standard annual deworming cycle we would have comparable groups of SAC.
+
+To clarify our identification strategy we will adopt a potential outcomes framework.  First, let the variable $Z_j$ be an indicator of whether cluster $j$ has been recently dewormed^[For simplicity, we combine the biannual and community-based deworming arms.]; $H_{ij}$ be an indicator of whether child $i$ has low or no infection; and $Y_{ij}$ be an indicator of whether child $i$ was present at school at survey time.  Let $H_{ij}(z)$ be potential health status when $Z_{j} = z$, and $Y_{ij}(z, h)$ be potential school attendance when $Z_{ij} = z$ and $H_{ij} = h$.
+
+To answer our first research question and estimate the average treatment effect, we compare school attendance of children, nine months after the first deworming, so that some clusters would have been dewormed three months ago and others nine months ago:
+$$
+  E[Y_{ij}(1, H_{ij}(1)) - Y_{ij}(0, H_{ij}(0))] = E[Y_{ij}|Z_j = 1] - E[Y_{ij}|Z_j = 0].
+$$
+And to estimate the local average treatment effect we use $Z_j$ as an instrumental variable and make the assumptions that
+
+* $Y_{ij}(1, h) = Y_{ij}(0, h), \forall h$: school attendance is not directly effected by deworming, but only through its effect on health.
+* There are only two types of children:
+    a) those who are always healthy, $H_{ij}(0) = H_{ij}(1)$,
+    b) and those who are vulnerable to infection, $H_{ij}(1) > H_{ij}(0)$.
+    
+Thus, we can estimate 
+$$
+  E[Y_{ij}(1, H_{ij}(1)) - Y_{ij}(0, H_{ij}(0))| H_{ij}(1) > H_{ij}(0)] = \frac{E[Y_{ij}|Z_j = 1] - E[Y_{ij}|Z_j = 0]}{E[H_{ij}|Z_j = 1] - E[H_{ij}|Z_j = 0]}.
+$$
+
+# References

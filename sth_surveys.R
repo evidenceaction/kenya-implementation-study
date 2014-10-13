@@ -159,7 +159,8 @@ ggplot(hf.sth.data %>% filter(sincetreat > 0)) +
 
 # Analysis -------------------------------------------------------------
 
-filter(prepost.sth.long.data, infection.type == "as", n.survey == 1, county == "BUSIA") %>%  
+filter(prepost.sth.long.data, infection.type == "sth", n.survey == 1) %>%  
+#   filter(county == "BUSIA") %>%
   lmer(infect ~ (1|schoolcode), data=., REML=FALSE) %>% 
   summary
 
