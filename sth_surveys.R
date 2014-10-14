@@ -16,6 +16,8 @@ source("cluster2.R")
 
 config <- yaml.load_file("local_config.yaml")
 
+western.province <- c("KAKAMEGA", "VIHIGA", "BUNGOMA", "BUSIA")
+
 # Prep data ---------------------------------------------------------------
 
 sth.infection.types <- c("as", "tr", "hk", "sm", "sth")
@@ -31,7 +33,7 @@ prepost.sth.data <- read.csv(sprintf("%s/Kenya STH/Y1Y2_60_prepost.csv", config$
          date=as.Date(date, format="%m/%d/%Y"),
          survey.mon=format(date, "%Y-%m") %>% factor(),
          sex=factor(gender, levels=c("female", "male")),
-         survey=factor(survey) %>% relevel(ref="Y1pre"),
+         survey=factor(survey, levels=c("Y1pre", "Y1post", "Y2pre", "Y2post")), # relevel(ref="Y1pre"),
          county=factor(county),
          n.survey.fac=factor(n.survey),
          deworm.status=sub("Y\\d", "", as.character(survey)) %>% factor %>% relevel(ref="pre")) %>%
@@ -108,6 +110,10 @@ hf.sth.long.data <- hf.sth.data %>%
         by=c("origin.id", "infection.type"),
         all.x=TRUE)
 
+# Save data ---------------------------------------------------------------
+
+save(list=ls(pattern="^(prepost|hf).+data$"), file="cleaned_sth.RData")
+
 # Plots -------------------------------------------------------------------
 
 ggplot(prepost.sth.long.data) + 
@@ -115,13 +121,14 @@ ggplot(prepost.sth.long.data) +
   facet_wrap(~ infection.type) + labs(x="Survey")
 
 prepost.sth.long.data %>% 
-  filter(infection.type != "sth") %>%
+  filter(!infection.type %in% c("sth", "shaem"),
+         county %in% western.province) %>%
   ggplot() +
-  geom_jitter(aes(y=epg, x=n.survey.fac, alpha=0.15, color=factor(n.survey))) +
+  geom_jitter(aes(y=epg, x=n.survey.fac, color=factor(deworm.status)), alpha=0.4) +
   geom_hline(aes(yintercept=moderate.epg), linetype="dotted", data=infection.levels) +
   labs(x="Survey", y="EPG") +
   scale_color_discrete("Survey") +
-  facet_grid(infection.type ~ county, margins=TRUE) 
+  facet_grid(~ infection.type, margins=TRUE) 
 
 ggplot(prepost.sth.long.data %>% filter(epg > 10000)) + 
   geom_jitter(aes(x=factor(n.survey), y=epg, color=county == "BUSIA"), alpha=0.5) +
@@ -160,7 +167,7 @@ ggplot(hf.sth.data %>% filter(sincetreat > 0)) +
 # Analysis -------------------------------------------------------------
 
 filter(prepost.sth.long.data, infection.type == "sth", n.survey == 1) %>%  
-#   filter(county == "BUSIA") %>%
+  filter(county %in% western.province) %>%
   lmer(infect ~ (1|schoolcode), data=., REML=FALSE) %>% 
   summary
 
@@ -186,14 +193,14 @@ for (it in infection.types) {
 #     print
 # }
 
-# for (it in "as") { # infection.types) {
+for (it in "as") { # infection.types) {
 #   sprintf("%s\n", it) %>% cat
   reg.data <- prepost.sth.long.data %>% filter(infection.type == it) 
   reg.res <- lm(epg ~ n.survey.fac, data=reg.data)
   reg.vcov <- vcov.cluster(reg.data, reg.res, cluster1="districtcode")
   reg.res %>% coeftest(., vcov=reg.vcov) %>% print
   reg.res %>% lht("n.survey.fac3 = n.survey.fac4", vcov=vcov.cluster(reg.data, ., cluster1="districtcode")) %>% print
-# }
+}
 
 quant.predict.data <- quant.reg.res %>% 
   predict(data.frame(n.survey.fac=factor(1:4))) %>% 
@@ -235,7 +242,7 @@ for (it in "as") { # infection.types) {
   reg.res %>% lht("n.survey.fac3 = n.survey.fac4", vcov=vcov.cluster(reg.data, ., cluster1="districtcode")) %>% print
 }
 
-for (it in infection.types) {
+for (it in "sth") { # infection.types) {
   sprintf("%s\n", it) %>% cat
   reg.data <- prepost.sth.long.data %>% filter(infection.type == it) 
   reg.res <- lm(high.intensity.bin ~ n.survey.fac, data=reg.data)
@@ -280,12 +287,18 @@ d_ply(prepost.sth.long.data, .(infection.type), function(df) {
     print
 })  
 
-d_ply(prepost.sth.long.data, .(infection.type), function(df) {
-  cat(sprintf("%s\n", df$infection.type[1]))
-  lm(high.bin ~ deworm.status + survey.mon, data=df) %>% 
-    coeftest(vcov=vcov.cluster(df, ., cluster1="districtcode")) %>%
-    print
-})  
+prepost.sth.long.data %>% 
+  filter(county %in% western.province, 
+         infection.type %in% c("sth", "as")) %>%
+  d_ply(.(infection.type), function(df) {
+    cat(sprintf("%s\n", df$infection.type[1]))
+    lm(high.bin ~ deworm.status + survey.mon, data=df) %>% 
+      (l(reg.res ~ {
+        robust.vcov <- vcov.cluster(df, reg.res, cluster1="districtcode")
+        coeftest(reg.res, vcov=robust.vcov) %>% print 
+#         reg.res %>% lht(grep("survey\\.mon", coef(.) %>% names, value=TRUE), vcov=robust.vcov) %>% print
+      })) 
+  })
 
 d_ply(prepost.sth.long.data, .(infection.type), function(df) {
   try(rq(epg ~ deworm.status + survey.mon, data=df, tau=c(0.80, 0.98)) %>% summary %>% print)
