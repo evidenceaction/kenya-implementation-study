@@ -1,8 +1,14 @@
 ---
 title: "Non-experimental Evaluation of the Impact of Deworming on School Attendance"
-output: pdf_document
+output: 
+  pdf_document:
+    fig_caption: yes
 bibliography: ~/Documents/library.bib
 ---
+
+\begin{center}
+  \textcolor{red}{Please do not distribute; data analysis for internal use only.}
+\end{center}
 
 ```{r, include=FALSE, results="hide"} 
 library(car)
@@ -10,38 +16,57 @@ library(ggplot2)
 library(plyr)
 library(dplyr)
 library(magrittr)
+library(quantreg)
 
 load("cleaned_sth.RData")
 
-# knitr::opts_chunk$set(cache=TRUE)
+western.province <- c("KAKAMEGA", "VIHIGA", "BUNGOMA", "BUSIA")
+
+knitr::opts_chunk$set(cache=TRUE)
 options(contrasts=c("contr.Treatment", getOption("contrasts")[2]))
 ```
 
-```{r, include=FALSE}
-predict.rob <- function(x, vcov.=vcov(x), newdata) {
+```{r predict-rob, include=FALSE}
+predict.rob <- function(x, vcov.=vcov(x), signif.level=0.05, newdata) {
   if (missing(newdata)) { 
     newdata <- x$model 
   }
   
+  newdata.col.re <- newdata %>% names %>% paste(collapse="|") %>% sprintf("(^|:)(%s)($|:)", .)
+  
   m.mat <- x %>% 
     terms %>% 
-    drop.terms(attr(., "term.labels") %in% names(newdata) %>% not %>% which, keep.response=FALSE) %>%
+    (l(trms ~ newdata.col.re %>% grepl(attr(trms, "term.labels")) %>% not %>% 
+         (l(mask ~ if (any(mask)) drop.terms(trms, which(mask), keep.response=FALSE) else delete.response(trms))))) %>%
     model.matrix(data=newdata)
   
-  vcov. %<>% (l(vc ~ {
-    used.terms <- colnames(vc) %>% sub("\\[.+", "", .) %in% c(names(newdata), "(Intercept)")
-    vc[used.terms, used.terms]
-  }))
+  used.terms <- l(names ~ {
+    ut <- names %>% sub("\\[.+", "", .) %>% grepl(newdata.col.re, .) 
+    ut[1] <- TRUE
+    
+    return(ut)
+  })
   
-  return(list(fit=m.mat %*% (x$coef %>% extract(names(.) %>% sub("\\[.+", "", .) %in% c(names(newdata), "(Intercept)"))),
-              se.fit=(m.mat %*% vcov. %*% t(m.mat)) %>% diag %>% sqrt))
+  vcov. %<>% (l(vc ~ vc %>% colnames %>% used.terms %>% vc[., .])) 
+  
+  fit <- m.mat %*% (x$coef %>% extract(names(.) %>% used.terms))
+  se.fit <- (m.mat %*% vcov. %*% t(m.mat)) %>% diag %>% sqrt
+
+  merr <- qnorm(signif.level/2, lower.tail=FALSE) * se.fit
+  
+  return(list(fit=fit,
+              se.fit=se.fit,
+              fit.max=fit + merr,
+              fit.min=fit - merr))
 }
 ```
 
-Evidence Action continues to investigate the effect of deworming on school outcomes, as first studied by @Miguel2004 in Kenya.  However, because of practical and ethical obstracles it is no longer feasible to replicate the original randomized experiment.  Thus we are looking for non-experimental strategies to answer the following questions:
+Evidence Action continues to investigate the effect of deworming on school outcomes, as first studied by @Miguel2004 in Kenya.  However, because of practical and ethical obstacles it is no longer feasible to replicate the original randomized experiment.  Thus we are looking for non-experimental strategies to answer the following questions:
 
 1. _How is the school attendance of school-aged children (SAC) impacted by deworming?_  This is a straightforward intention-to-treat (ITT) analysis. 
-2. _What is the effect of deworming on the school attendance of SAC who are vulnerable to moderate to high levels of worm infection?_ This is alocal average treatment effects (LATE) analysis, focusing on the latent subpopulation that most in need of deworming [@Imbens1994].
+2. _What is the effect of deworming on the school attendance of SAC who are vulnerable to moderate to high levels of worm infection?_ This is a local average treatment effects (LATE) analysis, focusing on the latent subpopulation that most in need of deworming [@Imbens1994].
+
+### Identification Strategy
 
 The elimination breakpoint study to be carried out by the London School of Hygiene and Tropical Medicine (LSHTM) presents a valuable opportunity to answer these questions, exploiting the randomized manipulation of reinfection rates.  At the same point of time---because of the greater frequency of deworming in one arm, and the wider deworming of the whole community in another arm---SAC be at risk of randomly varying levels of infection intensity.  Therefore, if reinfection is rapid enough within the standard annual deworming cycle we would have comparable groups of SAC.
 
@@ -61,53 +86,152 @@ For the LATE estimation we use $Z_j$ as an instrumental variable and make the as
     b) those who are always infected, $H_{ij}(0) = H_{ij}(1) = 0$, because they were infected before deworming and refused treatment when offered. 
     c) and those who are vulnerable to infection, $H_{ij}(1) > H_{ij}(0)$.
     
-Thus, we can estimate 
+Thus, we can estimate the effect of deworming on the school attendance of children who are responsive to the mass deworming program
 $$
   LATE = E[Y_{ij}(1, H_{ij}(1)) - Y_{ij}(0, H_{ij}(0))| H_{ij}(1) > H_{ij}(0)] = \frac{E[Y_{ij}|Z_j = 1] - E[Y_{ij}|Z_j = 0]}{E[H_{ij}|Z_j = 1] - E[H_{ij}|Z_j = 0]}.
 $$
 
-```{r, echo=FALSE, warning=FALSE, fig.width=10, fig.height=4, message=FALSE}
+### Preliminary Analysis^[All confidence intervals have a level of 95% and are calculated using cluster (district) robust standard errors.]
+
+<!-- In order to justify this study, we present some descriptive analysis of the incidence of moderate and high intensity STH infection in Western Kenya. -->  
+
+In the below figures, we see how the proportion of those infected at different levels evolved over the first two years of the National School Based Deworming Program (NSBDP)^[Year 1 in 2012-2013, and Year 2 in 2013-2014], in Western Kenya where the second phase of the elimination breakpoint study will take place.  It is clear that there continues to be a group of children getting moderately or highly reinfected between deworming rounds.  As the first figure shows, while there is decline in the incidence of infection the proportion of children with higher levels of infection recovers between rounds of deworming.  This is also observable in the quantile analysis of intensity levels: the 92nd percentile appears to be of at least a moderate level of infection. 
+
+```{r prepost, echo=FALSE, warning=FALSE, fig.width=10, fig.height=4, fig.cap="Proportion of Moderate and High Intensity Infection (Western Kenya)", message=FALSE}
 prepost.sth.long.data %>% 
   filter(county %in% western.province, 
          infection.type %in% c("sth", "as", "hk")) %>%
   ddply(.(infection.type), function(df) {
-    lm(high.bin ~ survey + survey.mon, data=df) %>% 
-      (l(reg.res ~ {
-        robust.vcov <- vcov.cluster(df, reg.res, cluster1="districtcode")
-        predict.data <- expand.grid(survey=levels(df$survey)) 
-        predict.rob(reg.res, vcov=robust.vcov, newdata=predict.data) %>% as.data.frame %>% cbind(predict.data)
-      })) 
+    predict.data <- expand.grid(survey=levels(df$survey)) 
+    
+    rbind(lm(high.bin ~ survey, data=df) %>% 
+        (l(reg.res ~ {
+          robust.vcov <- vcov.cluster(df, reg.res, cluster1="districtcode")
+          
+  #         lht(reg.res, "survey[T.Y2pre] = survey[T.Y2post]", vcov=robust.vcov) %>% print
+          
+          predict.rob(reg.res, vcov=robust.vcov, newdata=predict.data) %>% as.data.frame %>% cbind(predict.data) %>% mutate(dep.var="high.intensity")
+        })), 
+      lm(infect.bin ~ survey, data=df) %>% 
+        (l(reg.res ~ {
+          robust.vcov <- vcov.cluster(df, reg.res, cluster1="districtcode")
+          
+  #         lht(reg.res, "survey[T.Y2pre] = survey[T.Y2post]", vcov=robust.vcov) %>% print
+          
+          predict.rob(reg.res, vcov=robust.vcov, newdata=predict.data) %>% as.data.frame %>% cbind(predict.data) %>% mutate(dep.var="incidence")
+        })))
   }) %>%
-  mutate(merr=qnorm(0.05/2, lower.tail=FALSE) * se.fit,
-         fit.max=fit + merr,
-         fit.min=fit - merr,
-         infection.type=factor(infection.type, levels=c("as", "hk", "sth"), labels=c("Ascaris", "Hookworm", "All"))) %>%
+  mutate(infection.type=factor(infection.type, levels=c("as", "hk", "sth"), labels=c("Ascaris", "Hookworm", "All"))) %>%
   (l(ready.data ~ {
     dodge <- position_dodge(width=0.9) 
-    ggplot(ready.data, aes(x=survey, group=infection.type)) + 
-      geom_bar(aes(y=fit), stat="identity", position=dodge, alpha=0.5) +
-      geom_errorbar(aes(ymin=fit.min, ymax=fit.max), position=dodge, width=0.5) +
-      scale_y_continuous("Proportion of High/Moderate Intensity", limits=c(0, 0.3)) +
+    ggplot(ready.data, aes(x=survey, group=dep.var)) + 
+      geom_bar(aes(y=fit, fill=dep.var), stat="identity", position=dodge, alpha=0.5, width=0.5) +
+      geom_errorbar(aes(ymin=fit.min, ymax=fit.max), position=dodge, width=0.3) +
+      scale_y_continuous("Proportion") + 
       scale_x_discrete("Survey") + 
+      scale_fill_discrete("Proportion of Infection", labels=c("Moderate and High Intensity", "Incidence")) +
+#       facet_grid(dep.var ~ infection.type) 
       facet_wrap(~ infection.type) 
   }))
 ```
+  
 
-```{r, echo=FALSE, warning=FALSE, fig.width=10, fig.height=4, message=FALSE}
+```{r hi-freq, echo=FALSE, warning=FALSE, fig.width=10, fig.height=4, fig.cap="Dynamics of the Proportion of Moderate and High Intensity Infection (All Kenya)", message=FALSE, eval=FALSE}
 hf.sth.long.data %>%
-  filter(province.name == "WESTERN",
-         infection.type %in% c("sth", "as", "hk"),
+  filter(#province.name == "WESTERN",
+         infection.type %in% c("as"),
          sincetreat >= 0) %>%
   mutate(high.bin=ifelse(high == TRUE, 1, 0)) %>%
-  d_ply(.(infection.type), function(df) {
-    cat(sprintf("%s\n", df$infection.type[1]))
-    try(lm(high.bin ~ sincetreat*bl.high, data=df) %>% summary %>% print) #%>% 
-#       (l(reg.res ~ {
-#         robust.vcov <- vcov.cluster(df, reg.res, cluster1="districtcode")
-#         predict.data <- expand.grid(sincetreat=range(df$sincetreat))
-#         predict.rob(reg.res, vcov=robust.vcov, newdata=predict.data) %>% as.data.frame %>% cbind(predict.data)
-#       })) 
-  }) 
+  ddply(.(infection.type), function(df) {
+    lm(high.bin ~ sincetreat*bl.high, data=df) %>% 
+      (l(reg.res ~ {
+        robust.vcov <- vcov.cluster(df, reg.res, cluster1="districtcode")
+        predict.data <- expand.grid(sincetreat=(30 * c(3, 6, 9, 12) + 15) %>% unique,
+                                    bl.high=c(TRUE, FALSE))
+        coeftest(reg.res, vcov=robust.vcov) 
+        predict.rob(reg.res, vcov=robust.vcov, newdata=predict.data) %>% as.data.frame %>% cbind(predict.data)
+      }))
+  }) %>% (
+    l(ready.data ~ {
+      dodge <- position_dodge(width=0.6) 
+      ggplot(ready.data, aes(x=factor(sincetreat))) + 
+        geom_bar(aes(y=fit, fill=bl.high), stat="identity", position=dodge, alpha=0.5, width=0.5) +
+        geom_errorbar(aes(ymin=fit.min, ymax=fit.max, group=bl.high), position=dodge, width=0.3) +
+        scale_x_discrete("Months Since Deworming", labels=c("3", "6", "9", "12")) +
+        scale_y_continuous("Proportion of High/Moderate Intensity") +
+        scale_fill_discrete("Infection Intensity At Baseline", labels=c("Low or None", "Moderate or High"))
+    }))
 ```
+
+```{r, echo=FALSE, warning=FALSE, fig.width=10, fig.height=4, message=FALSE, eval=FALSE}
+hf.sth.long.data %>%
+  filter(province.name == "WESTERN",
+         infection.type %in% c("as"),
+         sincetreat >= 0) %>%
+  mutate(high.bin=ifelse(high == TRUE, 1, 0)) %>%
+  ddply(.(infection.type), function(df) {
+    lm(high.bin ~ sincetreat, data=df) %>% 
+      (l(reg.res ~ {
+        robust.vcov <- vcov.cluster(df, reg.res, cluster1="districtcode")
+        predict.data <- expand.grid(sincetreat=30 * c(3, 6, 9, 12) + 15)
+        coeftest(reg.res, vcov=robust.vcov) %>% print
+        predict.rob(reg.res, vcov=robust.vcov, newdata=predict.data) %>% as.data.frame %>% cbind(predict.data)
+      }))
+  }) %>% (
+#     ggplot(aes(x=sincetreat, group=bl.high)) + 
+#       geom_ribbon(aes(ymin=fit.min, ymax=fit.max, y=fit, fill=bl.high), alpha=0.35) +
+#       geom_line(aes(y=fit, color=bl.high))) %T>% (
+    l(ready.data ~ {
+      dodge <- position_dodge(width=0.9) 
+      ggplot(ready.data, aes(x=factor(sincetreat))) + 
+#         geom_bar(aes(y=fit, fill=bl.high), stat="identity", position=dodge, alpha=0.5) +
+#         geom_errorbar(aes(ymin=fit.min, ymax=fit.max, group=bl.high), position=dodge, width=0.5) +
+        geom_bar(aes(y=fit), stat="identity", alpha=0.5, data=ready.data) +
+        geom_errorbar(aes(ymin=fit.min, ymax=fit.max), width=0.5, data=ready.data) 
+        scale_x_discrete()  
+    }))
+```
+
+
+```{r, echo=FALSE, warning=FALSE, dpi=144, fig.width=10, fig.height=4, fig.cap="Quantiles of Ascaris Infection Intensity Levels (Western Kenya)", message=FALSE}
+prepost.sth.long.data %>% 
+  (l(.data ~ {
+    filter(.data, infection.type == "as", county %in% western.province) %>%
+    rq(epg ~ survey, tau=tau.range, data=.) %>%
+    predict(data.frame(survey=levels(prepost.sth.long.data$survey))) %>% 
+    t %>% 
+    as.data.frame %>% 
+    mutate(tau=rownames(.), 
+           tau=sub("tau=\\s+", "", tau) %>% as.numeric) %>% 
+    set_names(c(paste0("quant.", 1:4), "tau")) %>% 
+    reshape(direction="long", varying=1:4, idvar="tau", timevar="survey") %>% 
+    filter(tau %in% tau.range) %>%
+    ggplot(aes(x=survey, y=quant, color=factor(tau))) + 
+    geom_point() + 
+    geom_line() +
+    geom_hline(yintercept=5000, linetype="dotted") +
+    annotate("text", x=4, y=5000, label="Moderate Intensity", size=4, vjust=-0.8, hjust=0.2) +
+    scale_x_discrete("Survey", labels=levels(prepost.sth.long.data$survey)) +
+    scale_y_continuous("EPG") +
+    scale_color_discrete("Percentile", labels=sprintf("%d%%", tau.range * 100)) 
+  #   geom_point(aes(y=ave, shape="Mean"), data=ols.predict.data) + 
+  #   geom_line(aes(y=ave, linetype="Mean"), data=ols.predict.data)
+  }) %>% add_args(tau.range=c(80, 90, 92, 95, 98)/100))
+```
+
+
+### Power Analysis
+
+Power analysis was conducted using an intraclass correlation coefficient (ICC) calculated from the 2008 Kenya Demographic and Health Survey question on school attendance ($ICC = 0.015$).  Surveying 225 clusters and 10 children per cluster we would have a minimum detectable effect size (MDES) of $0.134 SD$.
+
+### Required Data
+
+To conduct this study we would need data collected from the elimination breakpoint study on surveyed children's
+
+1. Infection intensity 
+2. Household characteristics, and knowledge, attitudes and practices (KAP)
+3. Location of households and schools to control for spillovers
+
+We will have to separately collect school attendance data.  We are planning to use spot checks as used by @Miguel2004: field officers will conduct random and unannounced visits to schools to check the attendance of the surveyed children.
 
 # References

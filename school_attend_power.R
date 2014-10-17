@@ -7,6 +7,12 @@ library(lme4)
 
 miguel.kremer.residual <- 0.273 / sqrt(1 - 0.23)
 
+calc.mdes <- function(sig.level=0.05, power=0.8, alloc.frac=0.5, num.clust=300, clust.size=25, icc=0.04) {
+  M <- qt(sig.level/2, df=num.clust - 2, lower.tail=FALSE) + qt(power, df=num.clust - 2)
+
+  (M / sqrt(alloc.frac * (1 - alloc.frac) * num.clust)) * sqrt(icc + (((1 - icc) / clust.size)))
+}  
+
 calc.mde <- function(sig.level=0.05, power=0.8, alloc.frac=0.5, num.clust=300, clust.size=25, icc=0.04, residual=miguel.kremer.residual) {
   M <- qnorm(sig.level/2, lower.tail=FALSE) + qnorm(power)
 
@@ -15,9 +21,9 @@ calc.mde <- function(sig.level=0.05, power=0.8, alloc.frac=0.5, num.clust=300, c
  
 wide.hh.data <- read.dta("~/Data/KDHS/2008/KEHR52FL.DTA", convert.underscore=TRUE, convert.factors=FALSE) %>%
   select(hhid, hv001, hv002, hv022, starts_with("hv105"), starts_with("hv121")) %>%
-  rename(c("hv001"="cluster.num", 
-           "hv002"="hh.num",
-           "hv022"="region"))
+  rename(cluster.num=hv001, 
+         hh.num=hv002,
+         region=hv022)
 
 long.hh.data <- reshape(wide.hh.data, 
                         varying=list(grep("hv105", names(wide.hh.data)),
@@ -53,6 +59,8 @@ mde <- calc.mde(alloc.frac=2/3, num.clust=225, clust.size=225*0.2,
 #     icc=power.params$ICC, residual=sqrt(power.params$vara))
 (mde)
 (mde/overall.sd)
+
+mdes <- calc.mdes(alloc.frac=2/3, num.clust=225, clust.size=225*0.2, icc=icc)
 
 # filter(long.hh.data, region.2 %in% 1:2) %>%  
 #   lmer(attended.school ~ (1|region.2) + (1|cluster.num), data=., REML=FALSE) %>% 

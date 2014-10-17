@@ -25,8 +25,8 @@ infection.types <- c(sth.infection.types, "shaem")
 
 prepost.sth.data <- read.csv(sprintf("%s/Kenya STH/Y1Y2_60_prepost.csv", config$data_path), as.is=TRUE) %>%
   set_names(gsub("_", ".", names(.))) %>%
-  rename(c("asc.high"="as.high",
-           "id"="origin.id")) %>%
+  rename(as.high=asc.high,
+         origin.id=id) %>%
   mutate(id=paste(origin.id, n.survey, sep="-"),
          schoolcode=factor(schoolcode),
          districtcode=factor(districtcode),
@@ -72,8 +72,8 @@ prepost.school.data <- prepost.sth.long.data %>%
 
 hf.sth.data <- read.csv(sprintf("%s/Kenya STH/Y1_HF_noschoolname.csv", config$data_path), as.is=TRUE) %>%
   set_names(gsub("_", ".", names(.))) %>%
-  rename(c("asc.high"="as.high",
-           "id"="origin.id")) %>%
+  rename(as.high=asc.high,
+         origin.id=id) %>%
   mutate(schoolcode=factor(schoolcode),
          districtcode=factor(districtcode),
          prov.code=factor(prov.code),
@@ -97,8 +97,10 @@ hf.sth.long.data <- hf.sth.data %>%
                      direction="long",
                      varying=llply(.v.names, function(vn, it) paste0(it, vn), infection.types),
                      v.names=.v.names %>% sub("^\\.", "", .),
+                     ids=c("origin.id", "dateofsurvey"),
                      times=infection.types,
-                     timevar="infection.type")) %>% 
+                     timevar="infection.type",
+                     new.row.names=rep(rownames(.data), each=length(infection.types)) %>% paste(infection.types, sep="."))) %>% 
      add_args(.v.names=c("infect", "epg", ".high"))) %>%
   merge(infection.levels, by="infection.type", all.x=TRUE) %>%
   mutate(high=epg > moderate.epg) %>%
@@ -115,6 +117,9 @@ hf.sth.long.data <- hf.sth.data %>%
 save(list=ls(pattern="^(prepost|hf).+data$"), file="cleaned_sth.RData")
 
 # Plots -------------------------------------------------------------------
+
+prepost.sth.long.data %>%
+  ggplot()
 
 ggplot(prepost.sth.long.data) + 
   geom_jitter(aes(x=factor(n.survey), y=epg), alpha=0.5) +
@@ -182,7 +187,7 @@ for (it in infection.types) {
 # epg.quant.res <- foreach (it="as") %do% { #infection.types) %do% {
 #   sprintf("%s\n", it) %>% cat
   quant.reg.res <- prepost.sth.long.data %>% 
-    filter(infection.type == it) %>%
+    filter(infection.type == "as") %>%
 #     mutate(censor=24024,
 #            lcensor=0,
 #            epg=pmin(censor, epg)) %>%
@@ -305,3 +310,9 @@ d_ply(prepost.sth.long.data, .(infection.type), function(df) {
 })  
 
 lm(infect.bin ~ deworm.status + survey.mon, data=prepost.sth.long.data, subset=infection.type == "as")
+
+# hf.sth.long.data %>%
+#   filter(sincetreat %in% c(90:120, 270:300)) %>%
+#   mutate(treat=sincetreat <= 120,
+#          high.bin=ifelse(high == TRUE, 1, 0)) %>%
+#   lm(high.bin ~ treat, data=.)
