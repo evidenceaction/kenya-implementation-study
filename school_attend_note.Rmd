@@ -123,13 +123,13 @@ prepost.sth.long.data %>%
   }) %>%
   mutate(infection.type=factor(infection.type, levels=c("as", "hk", "sth"), labels=c("Ascaris", "Hookworm", "All"))) %>%
   (l(ready.data ~ {
-    dodge <- position_dodge(width=0.9) 
+    dodge <- position_dodge(width=0.5)
     ggplot(ready.data, aes(x=survey, group=dep.var)) + 
-      geom_bar(aes(y=fit, fill=dep.var), stat="identity", position=dodge, alpha=0.5, width=0.5) +
+      geom_bar(aes(y=fit, fill=dep.var), stat="identity", position=dodge, width=0.5) +
       geom_errorbar(aes(ymin=fit.min, ymax=fit.max), position=dodge, width=0.3) +
       scale_y_continuous("Proportion") + 
       scale_x_discrete("Survey") + 
-      scale_fill_discrete("Proportion of Infection", labels=c("Moderate and High Intensity", "Incidence")) +
+      scale_fill_discrete("Proportion of", labels=c("Moderate or High Intensity Infection", "Any Infection (Prevalence)")) +
 #       facet_grid(dep.var ~ infection.type) 
       facet_wrap(~ infection.type) 
   }))
